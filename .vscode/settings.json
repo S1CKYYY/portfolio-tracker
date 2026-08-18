@@ -1,0 +1,6 @@
+{
+  // Live Preview servíruje rovnou docs/, ne kořen repozitáře.
+  // Bez toho preview ukáže výpis složky a relativní fetch("data.json") míří vedle.
+  "livePreview.serverRoot": "docs",
+  "livePreview.openPreviewTarget": "Embedded Preview"
+}

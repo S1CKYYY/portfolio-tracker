@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio tracker — náhled</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#0c0e10;--panel:#15181c;--line:#282d33;--muted:#899099;--text:#f4f5f2;--lime:#95d400}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding:20px;line-height:1.5}
+h1,h2,h3,p{margin:0}
+.pos{color:var(--lime)}.neg{color:#ff6474}.warnc{color:#f3d15f}
+.eyebrow{color:#75808b;font-weight:800;font-size:9px;letter-spacing:.16em;margin-bottom:5px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:15px}
+
+.tabs{display:flex;gap:4px;background:#0f1214;border:1px solid #282d32;border-radius:10px;padding:4px;width:fit-content}
+.tabs button{border:0;background:transparent;color:#777f87;border-radius:7px;padding:9px 16px;font:inherit;font-size:11px;
+  font-weight:750;cursor:pointer}
+.tabs button.sel{background:#292e33;color:#fff}
+.pane{display:none;gap:15px}
+.pane.on{display:grid}
+.banner{border:1px solid #333a40;background:#15181c;border-radius:9px;padding:9px 12px;font-size:10px;color:#8d959d}
+
+/* --- přehled --- */
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap}
+.head h2{font-size:33px;letter-spacing:-.045em;margin-bottom:8px}
+.live{display:flex;align-items:center;gap:8px;font-size:11px;flex-wrap:wrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 10px var(--lime)}
+.live small{color:#7e8791;font-size:10px}
+.ctrls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.switch{background:#0f1214;border:1px solid #282d32;border-radius:8px;padding:3px;display:flex}
+.switch button{color:#777f87;border:0;background:transparent;border-radius:6px;padding:7px 12px;font:inherit;font-size:10px;
+  font-weight:750;cursor:pointer}
+.switch button.sel{background:#292e33;color:#fff}
+.toggle{border:1px solid #32383e;background:#191d21;color:#9299a2;padding:9px 13px;border-radius:9px;font:inherit;font-size:10px;
+  font-weight:700;cursor:pointer}
+.toggle.on{border-color:#f3d15f;color:#f3d15f;background:rgba(243,209,95,.09)}
+.card{border:1px solid var(--line);border-radius:14px;background:linear-gradient(145deg,#171a1e,#121519);padding:20px 22px}
+.chart{position:relative}
+.chart svg{width:100%;height:220px;overflow:visible;cursor:crosshair;display:block}
+.line{fill:none;stroke-width:2.2;vector-effect:non-scaling-stroke}
+.inv{fill:none;stroke:#5a636d;stroke-width:1.4;stroke-dasharray:5 5;vector-effect:non-scaling-stroke}
+.cross{stroke:#4d555e;stroke-width:1;vector-effect:non-scaling-stroke}
+.marker{cursor:pointer;stroke:#0f1214;stroke-width:1.5}
+.tip{position:absolute;top:8px;transform:translateX(-50%);background:#262b30;border:1px solid #3a4148;border-radius:7px;
+  padding:7px 10px;pointer-events:none;display:none;gap:2px;white-space:nowrap;z-index:2}
+.tip b{font-size:11px;display:block}.tip small{font-size:9px;color:#9299a2;display:block}
+.axis{display:flex;justify-content:space-between;align-items:center;color:#59616a;font-size:9px;margin-top:10px;gap:10px}
+.legend{display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:center}
+.legend i{width:14px;height:2px;border-radius:2px;display:inline-block;margin-left:8px}
+.hint{font-size:11px;color:#8d959d;line-height:1.6}
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#242a30;border:1px solid var(--line);
+  border-radius:14px;overflow:hidden}
+.metrics>div{background:#15181c;padding:15px 16px;display:grid;gap:4px}
+.metrics small{color:#68717a;font-size:8px;font-weight:800;letter-spacing:.1em}
+.metrics b{font-size:15px;letter-spacing:-.03em}
+.metrics i{color:#79818a;font-size:9px;font-style:normal}
+.cols{display:grid;grid-template-columns:1.5fr 1fr;gap:15px;align-items:start}
+.phead{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.phead h3{font-size:14px;margin-bottom:4px}
+.phead p{color:#747d86;font-size:9px}
+.count{color:#79818a;font-size:11px;font-weight:800}
+.moves{display:grid;max-height:430px;overflow-y:auto}
+.move{display:grid;grid-template-columns:58px 58px 62px 1fr;gap:10px;align-items:center;text-align:left;border:0;
+  border-top:1px solid #24292e;background:transparent;color:inherit;padding:11px 4px;cursor:pointer;font:inherit;width:100%}
+.move:hover{background:#1b1f23}
+.mdate{font-size:10px;color:#9299a2}
+.mret{font-size:12px;font-weight:750}
+.tag{font-size:8px;font-weight:800;letter-spacing:.06em;padding:4px 7px;border-radius:5px;text-align:center;text-transform:uppercase}
+.msum{font-size:10px;color:#8d959d;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.posrow{display:grid;grid-template-columns:4px 1fr auto;gap:11px;align-items:center;padding:9px 0;border-top:1px solid #24292e}
+.pbar{height:26px;background:#22272c;border-radius:2px;position:relative;overflow:hidden;display:block}
+.pbar i{position:absolute;inset:auto 0 0 0;background:var(--lime);border-radius:2px;opacity:.75}
+.pname b{display:block;font-size:11px}.pname small{display:block;color:#6f7881;font-size:9px;margin-top:2px}
+.pval{text-align:right}.pval b{display:block;font-size:11px}.pval small{display:block;color:#8c949c;font-size:9px;margin-top:2px}
+
+/* --- modal --- */
+.backdrop{position:fixed;inset:0;z-index:30;background:rgba(5,7,8,.8);backdrop-filter:blur(10px);display:none;
+  place-items:center;padding:20px}
+.backdrop.on{display:grid}
+.modal{width:min(560px,100%);max-height:88vh;overflow-y:auto;position:relative;background:#171b1f;border:1px solid #333a40;
+  border-radius:18px;padding:32px;box-shadow:0 30px 100px rgba(0,0,0,.5)}
+.close{position:absolute;right:15px;top:8px;border:0;background:transparent;color:#8f969c;font-size:26px;cursor:pointer;font:inherit}
+.modal h2{font-size:30px;margin:4px 0 12px;letter-spacing:-.04em}
+.tag.big{display:inline-block;font-size:9px;padding:5px 9px;text-transform:none;letter-spacing:.02em;margin-bottom:14px}
+.dsum{color:#c3c8cd;font-size:12px;line-height:1.75;margin-bottom:18px}
+.splitbar{display:flex;height:7px;border-radius:4px;overflow:hidden;background:#22272c;margin-bottom:7px}
+.drivers{width:100%;border-collapse:collapse;font-size:11px}
+.drivers td{padding:9px 0;border-top:1px solid #24292e}
+.drivers td:not(:first-child){text-align:right}
+.drivers b{display:block;font-size:11px}.drivers small{color:#6f7881;font-size:9px}
+.noevent{color:#79818a;font-size:10px;margin-top:16px;line-height:1.6}
+
+/* --- import --- */
+.drop{border:1.5px dashed #3a4148;border-radius:14px;background:#141719;padding:34px 22px;display:grid;justify-items:center;
+  gap:7px;cursor:pointer;text-align:center;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--lime);background:rgba(149,212,0,.05)}
+.drop:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+.dicon{width:46px;height:46px;border-radius:13px;background:rgba(149,212,0,.1);color:var(--lime);display:grid;
+  place-items:center;font-size:22px;margin-bottom:5px}
+.drop b{font-size:13px}.drop small{color:#7e8791;font-size:10px}
+.demo{display:flex;gap:8px;flex-wrap:wrap}
+.demo button{border:1px solid #32383e;background:#191d21;color:#c3c8cd;border-radius:9px;padding:9px 14px;font:inherit;
+  font-size:10px;font-weight:700;cursor:pointer}
+.demo button:hover{border-color:#6b9517}
+.file{border:1px solid #282d33;border-radius:13px;background:#15181c;padding:17px 19px;display:grid;gap:11px}
+.fhead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.fhead b{display:block;font-size:12px}
+.fhead small{display:block;color:#79818a;font-size:9px;margin-top:3px}
+.ccy{background:#0f1214;border:1px solid #282d32;border-radius:8px;padding:3px;display:flex;flex:none}
+.ccy.ask{border-color:#f3d15f}
+.ccy button{color:#777f87;border:0;background:transparent;border-radius:6px;padding:6px 12px;font:inherit;font-size:9px;
+  font-weight:750;cursor:pointer}
+.ccy button.sel{background:#292e33;color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid #2c3238;border-radius:6px;padding:4px 9px;font-size:9px;color:#9299a2}
+.chip b{color:#f4f5f2;font-size:10px}
+.symbols{color:#6f7881;font-size:9px;line-height:1.7}
+.block{border-radius:9px;padding:12px 14px;font-size:10px;line-height:1.65}
+.block>b{display:block;font-size:11px;margin-bottom:4px}
+.block p{color:#9299a2}
+.block.err{background:rgba(255,100,116,.07);border:1px solid rgba(255,100,116,.25)}
+.block.err>b{color:#ff8a96}
+.block.ok{background:rgba(149,212,0,.06);border:1px solid rgba(149,212,0,.2)}
+.block.ok>b{color:var(--lime)}
+.block.warn{background:rgba(243,209,95,.06);border:1px solid rgba(243,209,95,.22)}
+.block.warn summary{cursor:pointer;color:#f3d15f;font-size:10px}
+.block.plain{background:#101315;border:1px solid #24292e}
+.block.plain summary{cursor:pointer;color:#9299a2;font-size:10px}
+.block table{width:100%;border-collapse:collapse;margin-top:9px;font-size:10px}
+.block th{text-align:right;color:#68717a;font-size:8px;font-weight:800;letter-spacing:.08em;padding:5px 0}
+.block th:first-child,.block td:first-child{text-align:left}
+.block td{text-align:right;padding:6px 0;border-top:1px solid #24292e;color:#c3c8cd}
+.tx td:nth-child(2),.tx th:nth-child(2),.tx td:nth-child(3),.tx th:nth-child(3){text-align:left}
+.block ul{list-style:none;padding:0;margin:9px 0 0;display:grid;gap:7px}
+.block li{display:grid;gap:2px;color:#c3c8cd}
+.block code{color:#79818a;font-size:9px;word-break:break-all}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;border-top:1px solid #24292e;padding-top:14px}
+.totals{display:flex;align-items:center;gap:11px;font-size:11px}
+.totals span{font-size:10px}
+.primary{border:0;background:var(--lime);color:#101407;border-radius:9px;padding:11px 20px;font:inherit;font-size:11px;
+  font-weight:800;cursor:pointer}
+.msg{font-size:10px;padding:11px 13px;border-radius:9px;line-height:1.7}
+.msg.ok{background:rgba(149,212,0,.08);color:var(--lime)}
+.msg.err{background:rgba(255,100,116,.08);color:#ff8a96}
+
+.gate{position:fixed;inset:0;display:grid;place-items:center;padding:20px;background:var(--bg);z-index:50}
+.gate-box{width:min(400px,100%);text-align:center;border:1px solid #333a40;background:#171b1f;border-radius:18px;padding:34px}
+.gate-title{font-size:24px;margin:4px 0 12px;letter-spacing:-.03em}
+.gate-note{color:#8d959d;font-size:11px;line-height:1.7;margin-bottom:18px}
+.gate-box input{width:100%;border:1px solid #343b42;background:#101316;color:#f3f5f1;border-radius:10px;
+  padding:14px;outline:none;text-align:center;font:inherit;font-size:18px;letter-spacing:.16em}
+.gate-box input:focus{border-color:#729f17;box-shadow:0 0 0 3px rgba(149,212,0,.08)}
+.gate-box .primary{width:100%;margin-top:12px}
+.gate-msg{font-size:11px;margin-top:12px;min-height:16px;color:#ff6474}
+.gate-status{font-size:9px;color:#5b636b;margin-top:14px}
+.dicon{width:46px;height:46px;border-radius:13px;background:rgba(149,212,0,.1);color:var(--lime);
+  display:grid;place-items:center;font-size:22px;margin:0 auto 14px}
+@media(max-width:900px){
+  body{padding:14px}
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .cols{grid-template-columns:1fr}
+  .move{grid-template-columns:52px 52px 1fr;row-gap:4px}
+  .move .tag{grid-column:3;justify-self:start}
+  .msum{grid-column:1/-1}
+  .chart svg{height:180px}
+  .head h2{font-size:28px}
+  .foot{flex-direction:column;align-items:stretch}
+  .primary{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="gate" id="gate">
+  <div class="gate-box">
+    <div class="dicon">⌁</div>
+    <p class="eyebrow">SOUKROMÉ PORTFOLIO</p>
+    <h1 class="gate-title">Zadej heslo</h1>
+    <p class="gate-note">Data jsou na této adrese zašifrovaná. Bez hesla je nikdo nepřečte —
+      včetně GitHubu a kohokoli, kdo adresu zná.</p>
+    <input id="pass" type="password" autocomplete="current-password" placeholder="••••••••••••" aria-label="Heslo">
+    <button id="unlock" class="primary">Odemknout</button>
+    <p class="gate-msg" id="gateMsg"></p>
+    <p class="gate-status" id="gateStatus"></p>
+  </div>
+</div>
+
+<div class="wrap" id="wrap" hidden>
+  <div class="tabs">
+    <button id="tabOverview" class="sel">Přehled portfolia</button>
+    <button id="tabImport">Import z XTB</button>
+  </div>
+
+  <!-- ============ PŘEHLED ============ -->
+  <section id="paneOverview" class="pane on">
+    <div class="banner">Reálné burzovní ceny a kurzy CZK (leden 2025 – srpen 2026), modelové nákupy.
+      Ostrá verze tahá stejná čísla z <code>/api/portfolio/history</code>.</div>
+
+    <div class="head">
+      <div>
+        <p class="eyebrow">HODNOTA PORTFOLIA</p>
+        <h2 id="totalValue"></h2>
+        <div class="live"><span class="dot"></span><b id="liveChange"></b><small id="liveAsOf"></small></div>
+      </div>
+      <div class="ctrls">
+        <div class="switch" id="rangeSwitch"></div>
+        <button class="toggle" id="fxToggle" title="Přepočítá celou historii kurzem z prvního dne">bez měnového vlivu</button>
+      </div>
+    </div>
+
+    <div class="card chart">
+      <svg id="chart" viewBox="0 0 900 220" preserveAspectRatio="none"></svg>
+      <div class="tip" id="tip"></div>
+      <div class="axis">
+        <span id="axisFrom"></span>
+        <span class="legend"><i id="legLine"></i><span id="legLabel">hodnota</span><i style="background:#5a636d"></i>vloženo</span>
+        <span id="axisTo"></span>
+      </div>
+    </div>
+
+    <p class="hint" id="fxHint" style="display:none"></p>
+
+    <div class="metrics" id="metrics"></div>
+
+    <div class="cols">
+      <section class="card">
+        <div class="phead">
+          <div><h3>Výkyvy a jejich příčiny</h3><p>Dny mimo obvyklou denní odchylku · vybrané období</p></div>
+          <span class="count" id="moveCount"></span>
+        </div>
+        <div class="moves" id="moveList"></div>
+      </section>
+      <section class="card">
+        <div class="phead"><div><h3>Pozice</h3><p id="posAsOf"></p></div></div>
+        <div id="posList"></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ IMPORT ============ -->
+  <section id="paneImport" class="pane">
+    <div class="banner">Soubor se čte přímo v prohlížeči — nikam se neodesílá a nic se neukládá.
+      Klidně sem pusť svůj skutečný výpis z XTB.</div>
+
+    <div class="drop" id="drop" role="button" tabindex="0">
+      <div class="dicon">⇧</div>
+      <b>Přetáhni sem výpis z XTB</b>
+      <small>XLSX z obou účtů najednou · nebo klikni a vyber soubor</small>
+      <input id="fileInput" type="file" accept=".xlsx,.xls" multiple hidden>
+    </div>
+
+    <div class="demo">
+      <button id="demoBtn">Ukázat na vzorových datech</button>
+      <button id="clearBtn" style="display:none">Vyčistit</button>
+    </div>
+
+    <div id="importResults"></div>
+    <div id="importFoot"></div>
+    <div id="importMsg"></div>
+  </section>
+</div>
+
+<div class="backdrop" id="backdrop"><section class="modal" id="modal"></section></div>
+
+<script>
+/* ---------- odemčení ---------- */
+const b64 = s => { const bin=atob(s), out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; };
+
+async function openVault(vault, passphrase){
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name:"PBKDF2", salt:b64(vault.salt), iterations:vault.iterations, hash:"SHA-256" },
+    material, { name:"AES-GCM", length:256 }, false, ["decrypt"]);
+  // AES-GCM ověřuje i integritu, takže sem spadne špatné heslo i poškozený soubor.
+  const plain = await crypto.subtle.decrypt({ name:"AES-GCM", iv:b64(vault.iv) }, key, b64(vault.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+let DATA = null;
+let SERIES = [];
+
+async function boot(){
+  const pass = document.getElementById("pass").value;
+  const msg = document.getElementById("gateMsg");
+  if(pass.length < 12){ msg.textContent = "Heslo má aspoň 12 znaků."; return; }
+  msg.style.color = "#8d959d";
+  msg.textContent = "Odemykám… (600 000 iterací chvíli trvá)";
+  try {
+    const vault = await (await fetch("data.json", { cache:"no-store" })).json();
+    DATA = await openVault(vault, pass);
+  } catch(e){
+    msg.style.color = "#ff6474";
+    msg.textContent = /decrypt|operation-specific/i.test(e.message) ? "Špatné heslo." : "Data se nepodařilo načíst: " + e.message;
+    return;
+  }
+  SERIES = DATA.series.map(([d,v,c,i,r])=>({d,v,c,i,r}));
+  document.getElementById("gate").remove();
+  document.getElementById("wrap").hidden = false;
+  start();
+}
+
+// Kdy naposled běžel přepočet — jediná informace čitelná bez hesla.
+fetch("status.json", { cache:"no-store" }).then(r=>r.json()).then(s=>{
+  document.getElementById("gateStatus").textContent =
+    "Poslední přepočet " + new Date(s.generatedAt).toLocaleString("cs-CZ") + " · " + s.days + " dní";
+}).catch(()=>{});
+
+document.getElementById("unlock").onclick = boot;
+document.getElementById("pass").addEventListener("keydown", e => { if(e.key==="Enter") boot(); });
+document.getElementById("pass").focus();
+
+const RANGES = {"3m":91,"6m":182,"1r":365,"vše":99999};
+const CLS = {
+  market:{label:"trh",color:"#70a7ff",note:"plošný pohyb napříč pozicemi"},
+  specific:{label:"pozice",color:"#ff8f4c",note:"většinu pohybu udělala jedna pozice"},
+  fx:{label:"kurz",color:"#f3d15f",note:"hnula se koruna, ne ceny"},
+  flow:{label:"vklad",color:"#899099",note:"změnu hodnoty způsobil vklad"},
+  mixed:{label:"smíšené",color:"#9b7cff",note:"nic jednoznačného"}
+};
+const czk = v => new Intl.NumberFormat("cs-CZ",{style:"currency",currency:"CZK",maximumFractionDigits:0}).format(v);
+const pc = (v,d=2) => (v>=0?"+":"")+v.toFixed(d).replace(".",",")+" %";
+const sd = d => new Date(d+"T00:00:00Z").toLocaleDateString("cs-CZ",{day:"numeric",month:"short"});
+const ld = d => new Date(d+"T00:00:00Z").toLocaleDateString("cs-CZ",{dateStyle:"long"});
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = id => document.getElementById(id);
+
+/* ---------------- záložky ---------------- */
+function showTab(which){
+  $("tabOverview").classList.toggle("sel",which==="o");
+  $("tabImport").classList.toggle("sel",which==="i");
+  $("paneOverview").classList.toggle("on",which==="o");
+  $("paneImport").classList.toggle("on",which==="i");
+  if(which==="o") draw();
+}
+$("tabOverview").onclick=()=>showTab("o");
+$("tabImport").onclick=()=>showTab("i");
+
+/* ---------------- přehled ---------------- */
+let range="1r", fxNeutral=false, hoverIdx=null, m=null;
+
+function start(){
+  m = DATA.metrics;
+
+$("rangeSwitch").innerHTML = Object.keys(RANGES).map(r=>
+  `<button data-r="${r}" class="${r===range?"sel":""}">${r}</button>`).join("");
+$("rangeSwitch").onclick = e => {
+  const r = e.target.dataset.r; if(!r) return;
+  range = r;
+  [...$("rangeSwitch").children].forEach(b=>b.classList.toggle("sel",b.dataset.r===r));
+  draw();
+};
+$("fxToggle").onclick = () => {
+  fxNeutral = !fxNeutral;
+  $("fxToggle").classList.toggle("on",fxNeutral);
+  draw();
+};
+
+$("totalValue").textContent = czk(m.valueCzk);
+$("liveChange").textContent = pc(DATA.liveChangePct)+" dnes";
+$("liveChange").className = DATA.liveChangePct>=0?"pos":"neg";
+$("liveAsOf").textContent = "k "+ld(m.asOf)+" · obnovuje se po minutě";
+$("posAsOf").textContent = "K "+ld(m.asOf);
+
+$("metrics").innerHTML = [
+  ["TWR OD ZAČÁTKU", pc(m.twrPct), m.twrPct>=0?"pos":"neg", pc(m.twrAnnualizedPct)+" p.a."],
+  ["XIRR", pc(m.xirrPct), m.xirrPct>=0?"pos":"neg", "peněžně vážený"],
+  ["VLOŽENO", czk(m.investedCzk), "", "zisk "+czk(m.pnlCzk)],
+  ["Z TOHO KURZ", czk(m.fxEffectCzk), m.fxEffectCzk>=0?"pos":"neg", "ceny "+czk(m.priceEffectCzk)],
+  ["MAX PROPAD", pc(m.maxDrawdown.pct), "neg", sd(m.maxDrawdown.from)+" → "+sd(m.maxDrawdown.to)]
+].map(([l,v,c,s])=>`<div><small>${l}</small><b class="${c}">${v}</b><i>${s}</i></div>`).join("");
+
+  $("posList").innerHTML = DATA.positions.map(p=>`
+  <div class="posrow">
+    <span class="pbar"><i style="height:${Math.max(p.weight,2)}%"></i></span>
+    <span class="pname"><b>${esc(p.symbol)}</b><small>${esc(p.name)}</small></span>
+    <span class="pval"><b>${czk(p.valueCzk)}</b><small>${p.weight.toFixed(1).replace(".",",")} %</small></span>
+  </div>`).join("");
+  draw();
+}
+
+function draw(){
+  const series = SERIES.slice(Math.max(0, SERIES.length - RANGES[range]));
+  const moves = DATA.moves.filter(x => x.d >= series[0].d);
+  const key = fxNeutral ? "c" : "v";
+  const W=900, H=220;
+  const all = series.flatMap(p=>[p[key],p.i]);
+  const min = Math.min(...all)*0.985, max = Math.max(...all)*1.015;
+  const x = i => (i/(series.length-1))*W;
+  const y = v => H - ((v-min)/(max-min||1))*H;
+  const path = acc => series.map((p,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(acc(p)).toFixed(1)).join(" ");
+  const color = fxNeutral ? "#f3d15f" : "#95d400";
+
+  $("chart").innerHTML = `
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".22"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${path(p=>p[key])} L${W} ${H} L0 ${H}Z" fill="url(#g)"/>
+    <path class="inv" d="${path(p=>p.i)}"/>
+    <path class="line" style="stroke:${color}" d="${path(p=>p[key])}"/>
+    <line class="cross" id="cross" style="display:none" y1="0" y2="${H}"/>
+    ${moves.map(mv=>{const i=series.findIndex(p=>p.d===mv.d); return i<0?"":
+      `<circle class="marker" data-d="${mv.d}" cx="${x(i)}" cy="${y(series[i][key])}" r="4" fill="${CLS[mv.classification].color}"/>`;}).join("")}
+  `;
+  $("legLine").style.background = color;
+  $("legLabel").textContent = fxNeutral ? "hodnota při kurzu z prvního dne" : "hodnota";
+  $("axisFrom").textContent = sd(series[0].d);
+  $("axisTo").textContent = sd(series[series.length-1].d);
+
+  $("fxHint").style.display = fxNeutral ? "block" : "none";
+  $("fxHint").innerHTML = `Rozdíl proti zelené křivce je čistě koruna. Za celé období udělal kurz
+    <b class="${m.fxEffectCzk>=0?"pos":"neg"}">${czk(m.fxEffectCzk)}</b>, ceny <b class="pos">${czk(m.priceEffectCzk)}</b>.`;
+
+  $("moveCount").textContent = moves.length;
+  $("moveList").innerHTML = moves.length ? moves.map(mv=>`
+    <button class="move" data-d="${mv.d}">
+      <span class="mdate">${sd(mv.d)}</span>
+      <span class="mret ${mv.returnPct>=0?"pos":"neg"}">${pc(mv.returnPct)}</span>
+      <span class="tag" style="color:${CLS[mv.classification].color};background:${CLS[mv.classification].color}18">${CLS[mv.classification].label}</span>
+      <span class="msum">${esc(mv.summary)}</span>
+    </button>`).join("") : `<p class="hint">V tomto období se nic nevymykalo.</p>`;
+
+  // hover
+  const svg = $("chart");
+  svg.onmousemove = e => {
+    const r = svg.getBoundingClientRect();
+    const i = Math.round(Math.min(Math.max((e.clientX-r.left)/r.width,0),1)*(series.length-1));
+    hoverIdx = i;
+    const p = series[i], cross = document.getElementById("cross");
+    if(cross){cross.style.display="";cross.setAttribute("x1",x(i));cross.setAttribute("x2",x(i));}
+    const tip = $("tip");
+    tip.style.display="grid";
+    tip.style.left = (i/(series.length-1))*100+"%";
+    tip.innerHTML = `<b>${czk(p[key])}</b><small>${sd(p.d)}</small>` +
+      (p.r!=null?`<small class="${p.r>=0?"pos":"neg"}">${pc(p.r)}</small>`:"");
+  };
+  svg.onmouseleave = () => {
+    $("tip").style.display="none";
+    const cross=document.getElementById("cross"); if(cross) cross.style.display="none";
+  };
+}
+
+/* ---------------- detail výkyvu ---------------- */
+function openMove(d){
+  const mv = DATA.moves.find(x=>x.d===d); if(!mv) return;
+  const c = CLS[mv.classification];
+  $("modal").innerHTML = `
+    <button class="close" id="closeBtn">×</button>
+    <p class="eyebrow">${ld(mv.d).toUpperCase()}</p>
+    <h2 class="${mv.returnPct>=0?"pos":"neg"}">${pc(mv.returnPct)}</h2>
+    <span class="tag big" style="color:${c.color};background:${c.color}18">${c.label} · ${c.note}</span>
+    <p class="dsum">${esc(mv.summary)}</p>
+    ${(mv.priceSharePct||mv.fxSharePct)?`
+      <div style="margin-bottom:18px">
+        <div class="splitbar">
+          <span style="width:${mv.priceSharePct}%;background:#95d400"></span>
+          <span style="width:${mv.fxSharePct}%;background:#f3d15f"></span>
+        </div>
+        <small style="color:#79818a;font-size:9px">${mv.priceSharePct} % ceny · ${mv.fxSharePct} % kurz</small>
+      </div>`:""}
+    ${mv.drivers.length?`<table class="drivers"><tbody>${mv.drivers.map(d=>`
+      <tr><td><b>${esc(d.symbol)}</b><small>${esc(d.name)}</small></td>
+      <td class="${d.ownReturnPct>=0?"pos":"neg"}">${d.ownReturnPct!=null?pc(d.ownReturnPct):"—"}</td>
+      <td class="${d.contributionCzk>=0?"pos":"neg"}">${czk(d.contributionCzk)}</td>
+      <td><small>${Math.round(d.shareOfMove*100)} % pohybu</small></td></tr>`).join("")}</tbody></table>`:""}
+    <p class="noevent">K tomuto dni zatím není navázaná žádná událost — sem se napojí earnings, 8-K a Form 4 z EDGARu.</p>`;
+  $("backdrop").classList.add("on");
+  $("closeBtn").onclick = () => $("backdrop").classList.remove("on");
+}
+$("backdrop").onmousedown = e => { if(e.target===$("backdrop")) $("backdrop").classList.remove("on"); };
+document.addEventListener("click", e => {
+  const mk = e.target.closest(".marker"); if(mk) return openMove(mk.dataset.d);
+  const mv = e.target.closest(".move");   if(mv) return openMove(mv.dataset.d);
+});
+document.addEventListener("keydown", e => { if(e.key==="Escape") $("backdrop").classList.remove("on"); });
+
+/* ================= IMPORT — stejný parser jako lib/xtb/parse.ts ================= */
+/* Pozor: "Closed Positions" také obsahuje "positions" a v sešitu bývá první.
+   Listy proto hledáme uspořádanými vzory od nejpřesnějšího. */
+const CASH_PATTERNS=[/cash\s*operation/i,/hotovost/i,/cash/i];
+const OPEN_PATTERNS=[/open\s*position/i,/otevřen/i];
+const findSheet=(wb,pats)=>{ for(const p of pats){ const h=wb.SheetNames.find(n=>p.test(n)); if(h) return h; } return null; };
+const TYPE_MAP=[
+  {t:/interest\s*tax/i,type:"interest_tax"},
+  {t:/withholding|srážková/i,type:"withholding_tax"},
+  {t:/dividend/i,type:"dividend"},
+  {t:/commission|poplat|^fee/i,type:"fee"},
+  {t:/interest|úrok/i,type:"interest"},
+  {t:/transfer|conversion|převod/i,type:"transfer"},
+  {t:/deposit|vklad/i,type:"deposit"},
+  {t:/withdraw|payout|výběr/i,type:"withdrawal"},
+  {t:/split/i,type:"split"}];
+const COMMENT_RE=/(OPEN|CLOSE)\s+(BUY|SELL)\s+([\d.,]+?)(?:\/([\d.,]+))?\s*@\s*([\d.,]+)/i;
+const TYPE_LABELS={buy:"nákupy",sell:"prodeje",dividend:"dividendy",withholding_tax:"srážková daň",interest:"úroky",
+  interest_tax:"daň z úroků",fee:"poplatky",transfer:"převody mezi účty",deposit:"vklady",withdrawal:"výběry",split:"splity",other:"ostatní"};
+
+function num(v){
+  if(typeof v==="number") return v;
+  if(typeof v!=="string") return undefined;
+  const n=Number(v.replace(/\s/g,"").replace(/,(?=\d{1,2}$)/,".").replace(/,/g,""));
+  return Number.isFinite(n)?n:undefined;
+}
+function toIso(v){
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  if(typeof v==="number") return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10);
+  if(typeof v==="string"){
+    const a=v.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/);
+    if(a) return a[3]+"-"+a[2].padStart(2,"0")+"-"+a[1].padStart(2,"0");
+    const b=v.match(/^(\d{4})-(\d{2})-(\d{2})/); if(b) return b[0];
+  }
+  return undefined;
+}
+function classify(typeText,comment){
+  // Směr obchodu je v komentáři: OPEN = nákup, CLOSE = prodej.
+  const m=comment.match(COMMENT_RE);
+  if(m) return m[1].toUpperCase()==="OPEN"?"buy":"sell";
+  const t=typeText.toLowerCase();
+  if(/stock.*(purchase|buy)/.test(t)) return "buy";
+  if(/stock.*(sell|sale)/.test(t)) return "sell";
+  for(const x of TYPE_MAP) if(x.t.test(typeText)||x.t.test(comment)) return x.type;
+  return "other";
+}
+const toStamp = v => {
+  if(v instanceof Date) return v.toISOString();
+  if(typeof v==="string" && /^\d{4}-\d{2}-\d{2}[T ]/.test(v)) return v.replace(" ","T");
+  const d=toIso(v); return d?d+"T00:00:00.000Z":undefined;
+};
+
+function findHeader(rows){
+  for(let i=0;i<Math.min(rows.length,40);i++){
+    const cells=(rows[i]||[]).map(c=>String(c??"").trim().toLowerCase()), cols={};
+    cells.forEach((c,j)=>{
+      if(/^id$/.test(c)) cols.id=j;
+      else if(/^type$/.test(c)) cols.type=j;
+      else if(/^time$/.test(c)) cols.time=j;
+      else if(/^ticker$/.test(c)) cols.symbol=j;
+      else if(/^comment$/.test(c)) cols.comment=j;
+      else if(/^amount$/.test(c)) cols.amount=j;
+    });
+    if(cols.type!=null&&cols.time!=null&&cols.amount!=null) return {index:i,cols};
+  }
+  return null;
+}
+
+function parseCash(wb,utils,ccy){
+  const name = findSheet(wb,CASH_PATTERNS);
+  if(!name) return {transactions:[],unparsed:[{row:wb.SheetNames,reason:"Nenalezen list s hotovostními operacemi"}],meta:{sheet:""}};
+  const rows = utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true});
+  const h = findHeader(rows);
+  if(!h) return {transactions:[],unparsed:[{row:rows[0]||[],reason:"Nerozpoznaná hlavička listu"}],meta:{sheet:name}};
+  const cols=h.cols, transactions=[], unparsed=[];
+  for(const row of rows.slice(h.index+1)){
+    if(!row||!row.length) continue;
+    const typeText0=String(row[cols.type]??"").trim();
+    if(!typeText0) continue;
+    if(/^total$/i.test(typeText0)) continue;   // poslední řádek výpisu je součet
+    const occurredOn=toIso(row[cols.time]), amount=num(row[cols.amount]);
+    if(!occurredOn||amount==null){
+      if(row.some(c=>c!=null&&String(c).trim()!=="")) unparsed.push({row,reason:"Chybí datum nebo částka"});
+      continue;
+    }
+    const typeText=String(row[cols.type]??""), comment=String(row[cols.comment]??"");
+    const symbol=cols.symbol!=null?(String(row[cols.symbol]??"").trim()||undefined):undefined;
+    const type=classify(typeText,comment);
+    let quantity,price;
+    const mm=comment.match(COMMENT_RE);
+    if(mm){quantity=num(mm[3]);price=num(mm[5]);}
+    if((type==="buy"||type==="sell")&&(!quantity||!price))
+      unparsed.push({row,reason:'Obchod bez kusů/ceny v komentáři: "'+comment+'"'});
+    transactions.push({occurredOn,occurredAt:toStamp(row[cols.time]),type,symbol,quantity,price,amount,accountCurrency:ccy,comment:comment||typeText});
+  }
+  return {transactions,unparsed,meta:{sheet:name}};
+}
+
+function parseOpen(wb,utils){
+  const name = findSheet(wb,OPEN_PATTERNS);
+  if(!name) return {sheet:"",positions:[],lots:[],currency:null};
+  const rows=utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true});
+  let hi=-1, cols={};
+  for(let i=0;i<Math.min(rows.length,40);i++){
+    const cells=(rows[i]||[]).map(c=>String(c??"").trim().toLowerCase()), f={};
+    cells.forEach((c,j)=>{
+      if(/^ticker|symbol/.test(c)) f.symbol=j;
+      else if(/instrument|position|název|nazev/.test(c)) f.name=j;
+      else if(/^volume$/.test(c)) f.quantity=j;
+      else if(/^category$/.test(c)) f.category=j;
+      else if(/^type$/.test(c)) f.type=j;
+      else if(/^open time/.test(c)) f.openTime=j;
+      else if(/^value$/.test(c)&&f.marketValue==null) f.marketValue=j;
+    });
+    if(f.symbol!=null&&f.quantity!=null){hi=i;cols=f;break;}
+  }
+  if(hi<0) return {sheet:name,positions:[],lots:[],currency:null};
+  // Pod jednou hlavičkou jsou dva druhy řádků: agregát za instrument
+  // (vyplněná Category, prázdný Type) a jednotlivé loty (Type=BUY).
+  const positions=[], lots=[];
+  for(const row of rows.slice(hi+1)){
+    const symbol=String(row?.[cols.symbol]??"").trim(), quantity=num(row?.[cols.quantity]);
+    if(!symbol||quantity==null||quantity===0) continue;
+    const category=cols.category!=null?String(row[cols.category]??"").trim():"";
+    const rowType=cols.type!=null?String(row[cols.type]??"").trim():"";
+    if(category&&!rowType) positions.push({symbol,name:String(row?.[cols.name??cols.symbol]??symbol).trim(),category,quantity});
+    else if(rowType) lots.push({symbol,quantity,openedOn:toIso(row?.[cols.openTime])});
+  }
+  let currency=null;
+  for(const row of rows.slice(0,12)){
+    const c=String(row?.[3]??"").trim().toUpperCase();
+    if((c==="EUR"||c==="USD")&&!currency) currency=c;
+  }
+  // Kdyby XTB rozvržení změnilo a agregáty zmizely, poskládáme je z lotů —
+  // lepší než tvrdit, že pozice ve výpisu nejsou.
+  if(!positions.length&&lots.length){
+    const byTicker=new Map();
+    for(const l of lots) byTicker.set(l.symbol,(byTicker.get(l.symbol)??0)+l.quantity);
+    for(const [symbol,quantity] of byTicker) positions.push({symbol,name:symbol,category:"",quantity,derived:true});
+  }
+  return {sheet:name,positions,lots,currency};
+}
+
+function quantitiesOn(txs,d){
+  const q=new Map();
+  for(const t of [...txs].sort((a,b)=>(a.occurredAt??a.occurredOn).localeCompare(b.occurredAt??b.occurredOn))){
+    if(!t.symbol||t.occurredOn>d) continue;
+    if(t.type==="buy") q.set(t.symbol,(q.get(t.symbol)??0)+(t.quantity??0));
+    if(t.type==="sell") q.set(t.symbol,(q.get(t.symbol)??0)-(t.quantity??0));
+    if(t.type==="split") q.set(t.symbol,(q.get(t.symbol)??0)*(t.quantity??1));
+  }
+  for(const [k,v] of q) if(Math.abs(v)<1e-9) q.delete(k);
+  return q;
+}
+
+function reconcile(computed,reported){
+  const issues=[], seen=new Set();
+  for(const r of reported){
+    seen.add(r.symbol);
+    const c=computed.get(r.symbol)??0;
+    if(Math.abs(c-r.quantity)>1e-6) issues.push({symbol:r.symbol,computed:c,reported:r.quantity,diff:c-r.quantity});
+  }
+  for(const [symbol,c] of computed)
+    if(!seen.has(symbol)&&Math.abs(c)>1e-6) issues.push({symbol,computed:c,reported:0,diff:c});
+  return issues;
+}
+
+function summarize(txs){
+  const byType=new Map(), symbols=new Set();
+  let first="9999-99-99", last="0000-00-00";
+  for(const t of txs){
+    const e=byType.get(t.type)??{count:0,amount:0};
+    e.count++; e.amount+=t.amount; byType.set(t.type,e);
+    if(t.symbol) symbols.add(t.symbol);
+    if(t.occurredOn<first) first=t.occurredOn;
+    if(t.occurredOn>last) last=t.occurredOn;
+  }
+  return {total:txs.length,from:txs.length?first:null,to:txs.length?last:null,
+    symbols:[...symbols].sort(),
+    byType:[...byType.entries()].map(([type,v])=>({type,...v})).sort((a,b)=>b.count-a.count)};
+}
+
+const guessCcy = n => { const u=n.toUpperCase(); return u.includes("USD")?"USD":u.includes("EUR")?"EUR":null; };
+
+/* --- vzorová data: schválně obsahují typické chyby --- */
+const DEMO_CASH=[["Account number","10000001"],["Cash Operations"],["Date from (UTC)","2006-01-01 00:00:00"],
+["Date to (UTC)","2026-08-02 09:37:56"],
+["Type","Instrument","Ticker","Category","Time","Amount","ID","Comment","Product","Position ID"],
+["Stock sell","Microsoft","MSFT.US","STOCK","2026-02-03T14:20:00.000Z",200.02,"9003","CLOSE BUY 0.4842 @ 413.10","My Trades","555"],
+["Stock purchase","Microsoft","MSFT.US","STOCK","2026-02-03T09:15:00.000Z",-413.09,"9002","OPEN BUY 1 @ 413.09","My Trades","556"],
+["Stock purchase","Xetra-Gold Bearer Notes","4GLD.DE","ETC","2026-01-30T16:11:20.714Z",-135.86,"9001","OPEN BUY 1/1.3537 @ 135.8600","My Trades","557"],
+["Free funds interest tax","","","","2026-01-05T00:58:17.049Z",-0.01,"9000","Free-funds Interest Tax 2026-01","My Trades",""],
+["Free funds interest","","","","2026-01-05T01:04:46.556Z",0.04,"8999","Free-funds Interest 2026-01","My Trades",""],
+["Withholding tax","PayPal","PYPL.US","STOCK","2025-12-20T00:00:00.000Z",-0.95,"8998","PYPL.US USD WHT 30%","My Trades",""],
+["Dividend","PayPal","PYPL.US","STOCK","2025-12-20T00:00:00.000Z",3.16,"8997","PYPL.US USD 0.1400/ SHR","My Trades",""],
+["Transfer","","","","2025-11-10T00:00:00.000Z",-133.0,"8996","Currency conversion, EUR to USD","My Trades",""],
+["Total","","","","",0.56,"","","",""]];
+const DEMO_OPEN=[["Account number","10000001"],["Open Positions"],["Data as of report generated","2026-08-02 09:37:56"],
+["Product","Metric","Amount","Currency"],["My Trades","Value",1234.56,"EUR"],["My Trades","Profit",123.45,"EUR"],[],
+["Note","Summary values and open positions"],
+["Product","Instrument/Position","Ticker","Category","Type","Volume","Value","Current price","Open price","Open time (UTC)","Stop Loss","Take Profit","Net Profit %","Net Profit"],
+["My Trades","Xetra-Gold Bearer Notes","4GLD.DE","ETC","",3.5,472.5,"",130.0,"","","",2.5,11.5],
+["My Trades","557","4GLD.DE","","BUY",1.0,135.9,135.9,135.86,"2026-01-30T16:11:20.714Z","","",0.03,0.04],
+["My Trades","Microsoft","MSFT.US","STOCK","",0.5158,213.0,"",413.09,"","","",0.5,1.0],
+["My Trades","556","MSFT.US","","BUY",0.5158,213.0,413.0,413.09,"2026-02-03T09:15:00.000Z","","",0.5,1.0]];
+
+const today = new Date().toISOString().slice(0,10);
+let importFiles = [];
+
+function analyze(wb,utils,fileName){
+  const open = parseOpen(wb,utils);
+  // Měna účtu je přímo ve výpisu; název souboru je jen záloha.
+  const ccy = open.currency ?? guessCcy(fileName) ?? "EUR";
+  const parsed = parseCash(wb,utils,ccy);
+  const issues = reconcile(quantitiesOn(parsed.transactions,today),
+    open.positions.map(p=>({symbol:p.symbol,quantity:p.quantity})));
+  return {fileName,accountCurrency:ccy,guessed:open.currency==null&&guessCcy(fileName)==null,parsed,openPositions:open.positions,lots:open.lots,issues};
+}
+
+async function handleFiles(list){
+  if(!list||!list.length) return;
+  if(typeof XLSX==="undefined"){
+    $("importMsg").innerHTML = `<p class="msg err">Knihovna pro čtení XLSX se nenačetla (blokovaná síť).
+      Zkus „Ukázat na vzorových datech“ — parser je stejný.</p>`;
+    return;
+  }
+  $("importMsg").innerHTML = `<p class="msg">Zpracovávám…</p>`;
+  const results=[];
+  for(const file of Array.from(list)){
+    try{
+      const wb = XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+      results.push(analyze(wb,XLSX.utils,file.name));
+    }catch(err){
+      $("importMsg").innerHTML = `<p class="msg err">${esc(file.name)}: ${esc(err.message)}</p>`;
+    }
+  }
+  importFiles = [...importFiles.filter(f=>!results.some(r=>r.fileName===f.fileName)),...results];
+  $("importMsg").innerHTML = "";
+  renderImport();
+}
+
+function renderImport(){
+  $("clearBtn").style.display = importFiles.length ? "" : "none";
+  $("importResults").innerHTML = importFiles.map(f=>{
+    const s = summarize(f.parsed.transactions);
+    return `<article class="file">
+      <div class="fhead">
+        <div><b>${esc(f.fileName)}</b><small>${s.total} operací${s.from?` · ${s.from} → ${s.to}`:""}${f.parsed.meta.sheet?` · list „${esc(f.parsed.meta.sheet)}“`:""}</small></div>
+        <div class="ccy ${f.guessed?"ask":""}" data-file="${esc(f.fileName)}">
+          ${["EUR","USD"].map(c=>`<button data-ccy="${c}" class="${f.accountCurrency===c?"sel":""}">${c}</button>`).join("")}
+        </div>
+      </div>
+      ${f.guessed?`<p class="warnc" style="font-size:10px;line-height:1.6">Měnu účtu nejde poznat z názvu souboru — vyber ji.
+        Špatná měna znamená špatný přepočet do korun v celé historii.</p>`:""}
+      ${s.total===0?`<div class="block err"><b>Z tohoto souboru nic nevypadlo</b>
+        <p>${esc(f.parsed.unparsed[0]?.reason ?? "Neznámý formát.")}</p></div>`:""}
+      ${s.byType.length?`<div class="chips">${s.byType.map(t=>`<span class="chip"><b>${t.count}</b> ${TYPE_LABELS[t.type]??t.type}</span>`).join("")}</div>`:""}
+      ${s.symbols.length?`<p class="symbols">${s.symbols.map(esc).join(" · ")}</p>`:""}
+      ${f.issues.length?`<div class="block err"><b>Kusy nesedí s listem Open Positions</b>
+        <p>Výpis nesahá dost daleko do minulosti, nebo chybí transakce. Dokud to nesedí, je celá historie posunutá.</p>
+        <table><thead><tr><th>Ticker</th><th>Z transakcí</th><th>Hlásí XTB</th><th>Rozdíl</th></tr></thead><tbody>
+        ${f.issues.map(i=>`<tr><td><b>${esc(i.symbol)}</b></td><td>${i.computed}</td><td>${i.reported}</td>
+          <td class="${i.diff<0?"neg":"pos"}">${i.diff>0?"+":""}${Number(i.diff.toFixed(4))}</td></tr>`).join("")}
+        </tbody></table></div>`:""}
+      ${!f.issues.length&&f.openPositions.length?`<div class="block ok"><b>Kusy sedí</b>
+        <p>Dopočtené počty odpovídají ${f.openPositions.length} pozicím ve výpisu — ledger je kompletní.</p></div>`:""}
+      ${f.parsed.unparsed.length?`<details class="block warn"><summary><b>${f.parsed.unparsed.length} řádků k doplnění</b> — uloží se, ale bez kusů a ceny</summary>
+        <ul>${f.parsed.unparsed.slice(0,12).map(u=>`<li><span>${esc(u.reason)}</span><code>${esc(JSON.stringify(u.row).slice(0,140))}</code></li>`).join("")}</ul>
+        ${f.parsed.unparsed.length>12?`<p>…a dalších ${f.parsed.unparsed.length-12}</p>`:""}</details>`:""}
+      <details class="block plain"><summary><b>Prvních 8 transakcí</b> — jak je uvidí engine</summary>
+        <table class="tx"><thead><tr><th>Datum</th><th>Typ</th><th>Ticker</th><th>Kusy</th><th>Cena</th><th>Částka</th></tr></thead><tbody>
+        ${f.parsed.transactions.slice(0,8).map(t=>`<tr><td>${t.occurredOn}</td><td>${TYPE_LABELS[t.type]??t.type}</td>
+          <td>${esc(t.symbol??"—")}</td>
+          <td class="${t.quantity==null&&(t.type==="buy"||t.type==="sell")?"neg":""}">${t.quantity??"—"}</td>
+          <td>${t.price??"—"}</td><td class="${t.amount>=0?"pos":""}">${t.amount}</td></tr>`).join("")}
+        </tbody></table></details>
+    </article>`;
+  }).join("");
+
+  const tot = importFiles.reduce((a,f)=>({
+    transactions:a.transactions+f.parsed.transactions.length,
+    unparsed:a.unparsed+f.parsed.unparsed.length,
+    issues:a.issues+f.issues.length}),{transactions:0,unparsed:0,issues:0});
+
+  $("importFoot").innerHTML = importFiles.length?`<div class="foot">
+    <div class="totals"><b>${tot.transactions} transakcí</b>
+      ${tot.unparsed?`<span class="warnc">${tot.unparsed} bez kusů</span>`:""}
+      ${tot.issues?`<span class="neg">${tot.issues} nesrovnalostí</span>`:""}</div>
+    <button class="primary" id="saveBtn">${tot.issues?"Uložit i přes nesrovnalosti":"Uložit do ledgeru"}</button>
+  </div>`:"";
+
+  const save = $("saveBtn");
+  if(save) save.onclick = () => {
+    $("importMsg").innerHTML = `<p class="msg ok">V ostré verzi by teď ${tot.transactions} transakcí šlo do Supabase
+      (deduplikace přes ID operace, takže opakovaný import nic nerozbije) a hned by se přepočítala historie.
+      Tady se nic neukládá.</p>`;
+  };
+}
+
+$("importResults").onclick = e => {
+  const btn = e.target.closest("[data-ccy]"); if(!btn) return;
+  const fileName = btn.parentElement.dataset.file, ccy = btn.dataset.ccy;
+  importFiles = importFiles.map(f => f.fileName===fileName
+    ? {...f, accountCurrency:ccy, guessed:false,
+       parsed:{...f.parsed, transactions:f.parsed.transactions.map(t=>({...t,accountCurrency:ccy}))}}
+    : f);
+  renderImport();
+};
+
+$("drop").onclick = () => $("fileInput").click();
+$("drop").onkeydown = e => { if(e.key==="Enter"||e.key===" "){e.preventDefault();$("fileInput").click();} };
+$("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); handleFiles(e.dataTransfer.files); };
+$("fileInput").onchange = e => handleFiles(e.target.files);
+$("demoBtn").onclick = () => {
+  const wb = {SheetNames:["CASH OPERATION HISTORY","Open Positions"],
+    Sheets:{"CASH OPERATION HISTORY":{r:DEMO_CASH},"Open Positions":{r:DEMO_OPEN}}};
+  const utils = {sheet_to_json:s=>s.r};
+  importFiles = [analyze(wb,utils,"EUR_ukazka.xlsx")];
+  $("importMsg").innerHTML = "";
+  renderImport();
+};
+$("clearBtn").onclick = () => { importFiles=[]; $("importMsg").innerHTML=""; renderImport(); };
+
+</script>
+</body>
+</html>

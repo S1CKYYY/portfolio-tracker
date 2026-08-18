@@ -1,0 +1,14 @@
+# Výpisy z XTB do repozitáře NEPATŘÍ — obsahují číslo účtu a celou historii.
+# Do gitu jde jen zašifrovaný data/ledger.vault.json.
+*.xlsx
+*.xls
+vypisy/
+
+node_modules/
+.env
+.env.local
+.DS_Store
+
+# Rozšifrovaný ledger, kdyby sis ho někdy vypsal na disk
+data/ledger.json
+data/*.plain.json
